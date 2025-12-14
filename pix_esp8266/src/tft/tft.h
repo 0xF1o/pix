@@ -36,12 +36,14 @@ public:
   Time get_datetime();
   std::string fetch(std::string);
   void debug(std::string, ...);
+  bool is_customer_website_online();
 
 private:
   WiFiUDP *udp;
   NTPClient *time;
   Timezone *tz;
   TFT_eSPI *tft;
+  std::string customer_website_url;
   uint8_t pixel_data_old[16][16];
   uint8_t pixel_data[16][16];
   bool button_pressed = false;

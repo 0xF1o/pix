@@ -1,4 +1,5 @@
 #include "tft.h"
+#include <WiFiManager.h>
 
 TFT::TFT() {
   Serial.begin(115200);
@@ -104,15 +105,67 @@ std::string TFT::fetch(std::string url) {
 
 void TFT::debug(std::string s, ...) { Serial.println(s.c_str()); }
 
-void TFT::setup_wifi() {
-  // Wifi
-  debug("Connecting to wifi..");
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
-  while (WiFi.waitForConnectResult() != WL_CONNECTED) {
-    delay(2000);
-    debug("Retrying wifi connection..");
+bool TFT::is_customer_website_online() {
+  if (customer_website_url.empty()) {
+    debug("Customer website URL not configured");
+    return false;
   }
+
+  if (WiFi.status() != WL_CONNECTED) {
+    debug("WiFi not connected");
+    return false;
+  }
+
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+
+  if (!http.begin(client, customer_website_url.c_str())) {
+    debug("Failed to begin HTTP connection");
+    return false;
+  }
+
+  http.setTimeout(5000); // 5 second timeout
+  int http_code = http.GET();
+  http.end();
+
+  if (http_code > 0 && http_code < 400) {
+    debug("Customer website is online: " + std::to_string(http_code));
+    return true;
+  }
+
+  debug("Customer website is offline or error: " + std::to_string(http_code));
+  return false;
+}
+
+void TFT::setup_wifi() {
+  debug("Connecting to wifi..");
+
+  WiFi.mode(WIFI_STA);
+
+  WiFiManager wm;
+  wm.setDebugOutput(false);   // optional: disable Serial spam
+
+  // Add custom parameter for customer website
+  WiFiManagerParameter customer_website("customer_website", "Customer Website", "", 255);
+  wm.addParameter(&customer_website);
+
+  // This blocks until connected
+  bool res = wm.autoConnect("wlan.oida");
+
+  if (!res) {
+    debug("WiFi failed, rebooting...");
+    delay(3000);
+    ESP.restart();            // or handle error differently
+  }
+
+  // Save customer website URL from configuration
+  customer_website_url = customer_website.getValue();
+  if (!customer_website_url.empty()) {
+    debug("Customer website URL: " + customer_website_url);
+  }
+
+  debug("WiFi connected");
   debug("IP address:");
   debug(WiFi.localIP().toString().c_str());
 }
